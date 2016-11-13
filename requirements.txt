@@ -1,0 +1,6 @@
+asyncio
+uvloop 
+aiohttp
+aiohttp-jinja2
+jinja2
+ujson

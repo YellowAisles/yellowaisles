@@ -1,0 +1,4 @@
+venv
+*.pyc
+*.sw*
+crosstheaisle.conf
