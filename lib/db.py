@@ -120,7 +120,16 @@ class Database(object):
                       'userid == ? OR userid == ?', (convid, user1, user2))
             return convid
 
-    def get_conversation(self, convid):
+    def get_conversation(self, convid, userid=None):
+        if userid is not None:
+            with self.con as c:
+                c.execute('SELECT * FROM conversations WHERE convid == ?',
+                          (convid,))
+                conv = c.fetchone()
+                if not conv:
+                    return []
+                if userid != conv['user1'] and userid != conv['user2']:
+                    return []
         with self.con as c:
             c.execute('SELECT * FROM chat WHERE convid == ? ORDER BY sentts',
                       (convid,))

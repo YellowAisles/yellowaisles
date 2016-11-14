@@ -10,6 +10,7 @@ import jinja2
 from lib import db
 from app.facebook import facebook_login
 from app.chat import chat_websocket
+from app.chat import get_conversation
 
 import configparser
 import base64
@@ -44,6 +45,7 @@ if __name__ == "__main__":
     app.router.add_static('/static', './static/')
     app.router.add_get('/login', login)
     app.router.add_get('/facebook/login', facebook_login)
-    app.router.add_get('/chat', chat_websocket)
+    app.router.add_get('/api/chat', chat_websocket)
+    app.router.add_get('/api/conversation', get_conversation)
 
     web.run_app(app, port=int(config['server']['port']))

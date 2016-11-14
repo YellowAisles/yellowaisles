@@ -10,21 +10,41 @@ ACTIVE_CONNECTIONS = defaultdict(set)
 
 
 async def broadcast(convid, message):
+    if not convid:
+        return
     for ws in ACTIVE_CONNECTIONS[convid]:
         await ws.send_json(message)
 
 
 @authenticated
+async def get_conversation(request):
+    params = request.url.query
+    session = await get_session(request)
+    userid = session['userid']
+    if 'convid' not in params:
+        conversation = request.app['db'].get_user_current_conversation(userid)
+    else:
+        try:
+            convid = int(params['convid'])
+        except ValueError:
+            raise web.HTTPBadRequest(text='invalid_convid')
+        conversation = request.app['db'].get_conversation(convid, userid=userid)
+    return web.json_response(conversation)
+
+
+@authenticated
 async def chat_websocket(request):
     session = await get_session(request)
-    userid = session['userid']  # this should be done with a secure cookie
+    userid = session['userid']
+    convid = request.app['db'].get_user(userid)['curconv']
 
     ws = web.WebSocketResponse()
     await ws.prepare(request)
 
-    convid = request.app['db'].get_user_current_conversation(userid)
-    ACTIVE_CONNECTIONS[convid].add(ws)
+    if not convid:
+        raise web.HTTPPreconditionFailed()
 
+    ACTIVE_CONNECTIONS[convid].add(ws)
     async for msg in ws:
         if msg.type == WSMsgType.ERROR:
             ACTIVE_CONNECTIONS[convid].remove(ws)
