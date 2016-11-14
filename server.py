@@ -5,7 +5,7 @@ import aiohttp_jinja2
 import jinja2
 
 from lib import requests
-from lib.db import Database
+from lib import db 
 
 import configparser
 
@@ -33,10 +33,20 @@ async def facebook_login(request):
     access_token_url = "https://graph.facebook.com/v2.8/oauth/access_token"
     url = requests.build_url(access_token_url, token_request_params)
     access_token_response = await requests.get_json(url)
-    print(access_token_response)
 
-    return web.Response(text=("code: {code}, granted_scores: "
-                              "{granted_scopes}").format(**params))
+    print(access_token_response)
+    fb_url = ("https://graph.facebook.com/v2.8/me?fields=email,name"
+              "&access_token={access_token}").format(**access_token_response)
+    user_data = await requests.get_json(fb_url)
+
+    try:
+        uid = request.app['db'].new_user(user_data['name'], user_data['email'],
+                                         user_data['id'],
+                                         access_token_response['access_token'])
+    except db.UserAlreadyExists:
+        uid = user_data['id']
+
+    return web.Response(text=("uid: {}").format(uid))
 
 
 if __name__ == "__main__":
@@ -45,7 +55,7 @@ if __name__ == "__main__":
 
     app = web.Application()
     app['config'] = config
-    app['db'] = Database()
+    app['db'] = db.Database()
 
     aiohttp_jinja2.setup(
         app,

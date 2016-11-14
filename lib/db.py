@@ -1,6 +1,6 @@
 import sqlite3
 import datetime
-from contextlib import closing
+from contextlib import contextmanager
 
 
 class NoConversation(Exception):
@@ -15,11 +15,21 @@ class InvalidSender(Exception):
     pass
 
 
+class UserAlreadyExists(Exception):
+    pass
+
+
 def dict_factory(cursor, row):
     d = {}
     for idx, col in enumerate(cursor.description):
         d[col[0]] = row[idx]
     return d
+
+
+@contextmanager
+def sqlcloser(c):
+    yield c.cursor()
+    c.commit()
 
 
 class Database(object):
@@ -34,7 +44,7 @@ class Database(object):
 
     @property
     def con(self):
-        return closing(self._con.cursor())
+        return sqlcloser(self._con)
 
     def create_tables(self):
         with self.con as c:
@@ -85,11 +95,15 @@ class Database(object):
                           "recievedts) values (?, ?, ?, ?, ?, ?)", (data))
             return r.lastrowid
 
-    def new_user(self, name, email):
-        data = (name, email)
-        with self.con as c:
-            r = c.execute("insert into user(name, email) values (?, ?)", data)
-            return r.lastrowid
+    def new_user(self, name, email, uid=None, facebookauth=None):
+        data = (uid, name, email, facebookauth)
+        try:
+            with self.con as c:
+                r = c.execute("insert into user(userid, name, email, "
+                              "facebookauth) values (?, ?, ?, ?)", data)
+                return r.lastrowid
+        except sqlite3.IntegrityError as e:
+            raise UserAlreadyExists() from e
 
     def new_conversation(self, user1, user2):
         with self.con as c:
@@ -138,6 +152,10 @@ if __name__ == "__main__":
         uid = db.new_user(user, user + "@example.com")
         print("uid:", uid)
         users[user] = uid
+
+    uid = db.new_user('test', 'test@example.com', 666)
+    print("Tried to create user with uid 666:", uid)
+
     convid = db.new_conversation(users['micha'], users['steven'])
     print("New conversation ebtween micha and steven: ", convid)
 

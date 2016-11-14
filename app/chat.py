@@ -27,7 +27,7 @@ async def chat_websocket(request):
             ACTIVE_CONNECTIONS[convid].remove(ws)
         elif msg.type == WSMsgType.TEXT:
             try:
-                data = json.loads(msg)
+                data = json.loads(msg.data)
             except (ValueError, TypeError):
                 ws.send_json({"error": "Could not parse message"})
                 continue

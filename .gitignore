@@ -2,3 +2,4 @@ venv
 *.pyc
 *.sw*
 crosstheaisle.conf
+crosstheaisle.db
