@@ -65,7 +65,7 @@ async def facebook_login(request):
         session['userid'] = userid
         session['name'] = user_data['name']
 
-    return web.Response(text=("userid: {}").format(userid))
+    return web.HTTPTemporaryRedirect('/login', body=b'Redirecting...')
 
 
 if __name__ == "__main__":
