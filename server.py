@@ -7,8 +7,9 @@ from aiohttp_session.cookie_storage import EncryptedCookieStorage
 import aiohttp_jinja2
 import jinja2
 
-from lib import requests
 from lib import db
+from app.facebook import facebook_login
+from app.chat import chat_websocket
 
 import configparser
 import base64
@@ -22,50 +23,6 @@ async def login(request):
     session = await get_session(request)
     return {'config': request.app['config'],
             'name': session.get('name', None)}
-
-
-def obscure_id(uid, secret, suffix):
-    s = int.from_bytes(bytes(secret, 'utf8') + bytes(suffix, 'utf8'), 'little')
-    return s % uid
-
-
-async def facebook_login(request):
-    session = await get_session(request)
-    config = request.app['config']
-    params = request.url.query
-    if 'error_reason' in params:
-        return web.Response(text=("You denied us because: "
-                                  "{error_description}").format(**params))
-    token_request_params = {
-        "client_id": config['facebook']['app_id'],
-        "redirect_uri": config['facebook']['redirect_uri'],
-        "client_secret": config['facebook']['app_secret'],
-        "code": params['code'],
-    }
-
-    access_token_url = "https://graph.facebook.com/v2.8/oauth/access_token"
-    url = requests.build_url(access_token_url, token_request_params)
-    access_token_response = await requests.get_json(url)
-
-    fb_url = ("https://graph.facebook.com/v2.8/me?fields=email,name"
-              "&access_token={access_token}").format(**access_token_response)
-    user_data = await requests.get_json(fb_url)
-    user_data['id'] = obscure_id(int(user_data['id']),
-                                 app['config']['server']['fernet_secret'],
-                                 'facebook')
-
-    try:
-        userid = request.app['db'].new_user(user_data['name'],
-                                            user_data['email'],
-                                            user_data['id'],
-                                            access_token_response['access_token'])
-    except db.UserAlreadyExists:
-        userid = user_data['id']
-    finally:
-        session['userid'] = userid
-        session['name'] = user_data['name']
-
-    return web.HTTPTemporaryRedirect('/login', body=b'Redirecting...')
 
 
 if __name__ == "__main__":
@@ -87,5 +44,6 @@ if __name__ == "__main__":
     app.router.add_static('/static', './static/')
     app.router.add_get('/login', login)
     app.router.add_get('/facebook/login', facebook_login)
+    app.router.add_get('/chat', chat_websocket)
 
     web.run_app(app, port=int(config['server']['port']))

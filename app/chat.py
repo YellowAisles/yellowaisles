@@ -1,6 +1,8 @@
 from aiohttp import web
 from aiohttp import WSMsgType
+from aiohttp_session import get_session
 import ujson as json
+from lib.authentication import authenticated
 from collections import defaultdict
 
 
@@ -12,9 +14,10 @@ async def broadcast(convid, message):
         await ws.send_json(message)
 
 
+@authenticated
 async def chat_websocket(request):
-    params = request.url.query
-    userid = params['userid']  # this should be done with a secure cookie
+    session = await get_session(request)
+    userid = session['userid']  # this should be done with a secure cookie
 
     ws = web.WebSocketResponse()
     await ws.prepare(request)
