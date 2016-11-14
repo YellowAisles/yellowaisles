@@ -7,6 +7,14 @@ class NoConversation(Exception):
     pass
 
 
+class ArchivedConversation(Exception):
+    pass
+
+
+class InvalidSender(Exception):
+    pass
+
+
 def dict_factory(cursor, row):
     d = {}
     for idx, col in enumerate(cursor.description):
@@ -33,7 +41,7 @@ class Database(object):
             c.execute("create table user(userid integer primary key, "
                       "name text, email text, facebookauth blob, curconv int)")
             c.execute("create table conversations(convid integer primary key, "
-                      "user1 int, user2 int)")
+                      "user1 int, user2 int, archived int)")
             c.execute("create table chat(msgid integer primary key, "
                       "convid int, sentts timestamp, sender int, "
                       "reciever int, message blob, recievedts timestamp)")
@@ -43,13 +51,32 @@ class Database(object):
     def new_message(self, sender, reciever, message):
         with self.con as c:
             c.execute('SELECT convid FROM conversations WHERE '
-                      '(user1 == ? AND user2 == ?) OR'
-                      '(user2 == ? AND user1 == ?)',
+                      '((user1 == ? AND user2 == ?) OR'
+                      ' (user2 == ? AND user1 == ?)) AND '
+                      'archived == 0',
                       (sender, reciever)*2)
             try:
                 convid = c.fetchone()['convid']
             except TypeError as e:
                 raise NoConversation() from e
+        return self._add_message(convid, sender, reciever, message)
+
+    def new_message_user(self, convid, sender, message):
+        with self.con as c:
+            c.execute('SELECT * FROM conversations WHERE convid == ?',
+                      (convid,))
+            conv = c.fetchone()
+        if conv['archived']:
+            raise ArchivedConversation()
+        if sender not in (conv['user1'], conv['user2']):
+            raise InvalidSender()
+        if sender == conv['user1']:
+            reciever = conv['user1']
+        else:
+            reciever = conv['user2']
+        return self._add_message(convid, sender, reciever, message)
+
+    def _add_message(self, convid, sender, reciever, message):
         data = (convid, datetime.datetime.now(), sender, reciever,
                 message, None)
         with self.con as c:
@@ -66,8 +93,12 @@ class Database(object):
 
     def new_conversation(self, user1, user2):
         with self.con as c:
-            r = c.execute('INSERT INTO conversations(user1, user2) '
-                          'VALUES (?, ?)', (user1, user2))
+            c.execute('UPDATE conversations SET archived = 1 WHERE '
+                      'user1 == ? OR user2 == ? OR '
+                      'user1 == ? OR user2 == ?',
+                      (user1, user1, user2, user2))
+            r = c.execute('INSERT INTO conversations(user1, user2, archived) '
+                          'VALUES (?, ?, 0)', (user1, user2))
             convid = r.lastrowid
             c.execute('UPDATE user SET curconv = ? WHERE '
                       'userid == ? OR userid == ?', (convid, user1, user2))
@@ -89,6 +120,11 @@ class Database(object):
             c.execute('SELECT curconv FROM user WHERE userid == ?', (userid,))
             curconv = c.fetchone()['curconv']
         return self.get_conversation(curconv)
+
+    def get_user(self, userid):
+        with self.con as c:
+            c.execute('SELECT * FROM user WHERE userid == ?', (userid,))
+            return c.fetchone()
 
 
 if __name__ == "__main__":

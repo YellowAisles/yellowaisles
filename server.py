@@ -5,24 +5,20 @@ import aiohttp_jinja2
 import jinja2
 
 from lib import requests
+from lib.db import Database
 
 import configparser
 
 
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-config = configparser.ConfigParser()
-config.read('crosstheaisle.conf')
-
-
-async def hello(request):
-    return web.Response(text="Hello, world")
 
 
 @aiohttp_jinja2.template('facebook_login.jinja2')
 def login(request):
-    return {'config': config}
+    return {'config': request.app['config']}
 
 async def facebook_login(request):
+    config = request.app['config']
     params = request.url.query
     if 'error_reason' in params:
         return web.Response(text=("You denied us because: "
@@ -35,8 +31,8 @@ async def facebook_login(request):
     }
 
     access_token_url = "https://graph.facebook.com/v2.8/oauth/access_token"
-    access_token_response = await requests.get_json(requests.build_url(access_token_url,
-                                                                 token_request_params))
+    url = requests.build_url(access_token_url, token_request_params)
+    access_token_response = await requests.get_json(url)
     print(access_token_response)
 
     return web.Response(text=("code: {code}, granted_scores: "
@@ -44,7 +40,13 @@ async def facebook_login(request):
 
 
 if __name__ == "__main__":
+    config = configparser.ConfigParser()
+    config.read('crosstheaisle.conf')
+
     app = web.Application()
+    app['config'] = config
+    app['db'] = Database()
+
     aiohttp_jinja2.setup(
         app,
         loader=jinja2.FileSystemLoader('./template/')
