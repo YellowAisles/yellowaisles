@@ -21,7 +21,12 @@ asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 async def login(request):
     session = await get_session(request)
     return {'config': request.app['config'],
-            'userid': session.get('userid', None)}
+            'name': session.get('name', None)}
+
+
+def obscure_id(uid, secret, suffix):
+    s = int.from_bytes(bytes(secret, 'utf8') + bytes(suffix, 'utf8'), 'little')
+    return s % uid
 
 
 async def facebook_login(request):
@@ -45,7 +50,9 @@ async def facebook_login(request):
     fb_url = ("https://graph.facebook.com/v2.8/me?fields=email,name"
               "&access_token={access_token}").format(**access_token_response)
     user_data = await requests.get_json(fb_url)
-    user_data['id'] += '_fb'
+    user_data['id'] = obscure_id(int(user_data['id']),
+                                 app['config']['server']['fernet_secret'],
+                                 'facebook')
 
     try:
         userid = request.app['db'].new_user(user_data['name'],
@@ -56,6 +63,7 @@ async def facebook_login(request):
         userid = user_data['id']
     finally:
         session['userid'] = userid
+        session['name'] = user_data['name']
 
     return web.Response(text=("userid: {}").format(userid))
 
