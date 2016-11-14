@@ -1,23 +1,31 @@
 import asyncio
 import uvloop
 from aiohttp import web
+import aiohttp_session
+from aiohttp_session import get_session
+from aiohttp_session.cookie_storage import EncryptedCookieStorage
 import aiohttp_jinja2
 import jinja2
 
 from lib import requests
-from lib import db 
+from lib import db
 
 import configparser
+import base64
 
 
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 
 @aiohttp_jinja2.template('facebook_login.jinja2')
-def login(request):
-    return {'config': request.app['config']}
+async def login(request):
+    session = await get_session(request)
+    return {'config': request.app['config'],
+            'userid': session.get('userid', None)}
+
 
 async def facebook_login(request):
+    session = await get_session(request)
     config = request.app['config']
     params = request.url.query
     if 'error_reason' in params:
@@ -34,19 +42,22 @@ async def facebook_login(request):
     url = requests.build_url(access_token_url, token_request_params)
     access_token_response = await requests.get_json(url)
 
-    print(access_token_response)
     fb_url = ("https://graph.facebook.com/v2.8/me?fields=email,name"
               "&access_token={access_token}").format(**access_token_response)
     user_data = await requests.get_json(fb_url)
+    user_data['id'] += '_fb'
 
     try:
-        uid = request.app['db'].new_user(user_data['name'], user_data['email'],
-                                         user_data['id'],
-                                         access_token_response['access_token'])
+        userid = request.app['db'].new_user(user_data['name'],
+                                            user_data['email'],
+                                            user_data['id'],
+                                            access_token_response['access_token'])
     except db.UserAlreadyExists:
-        uid = user_data['id']
+        userid = user_data['id']
+    finally:
+        session['userid'] = userid
 
-    return web.Response(text=("uid: {}").format(uid))
+    return web.Response(text=("userid: {}").format(userid))
 
 
 if __name__ == "__main__":
@@ -56,6 +67,9 @@ if __name__ == "__main__":
     app = web.Application()
     app['config'] = config
     app['db'] = db.Database()
+
+    secret_key = base64.urlsafe_b64decode(config['server']['fernet_secret'])
+    aiohttp_session.setup(app, EncryptedCookieStorage(secret_key))
 
     aiohttp_jinja2.setup(
         app,

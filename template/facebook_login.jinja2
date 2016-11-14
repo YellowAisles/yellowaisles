@@ -5,6 +5,7 @@
 <meta charset="UTF-8">
 </head>
 <body>
+{% if userid %}Hello user {{ userid }}<br>{% endif %}
 <button onClick="window.open('https://www.facebook.com/v2.8/dialog/oauth?client_id={{config['facebook'].app_id}}&redirect_uri={{config['facebook'].redirect_uri}}&scope={{config['facebook'].scopes}}&response_type=code,granted_scopes');">Facebook Login</button>
 </body>
 </html>

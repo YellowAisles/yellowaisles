@@ -28,8 +28,10 @@ def dict_factory(cursor, row):
 
 @contextmanager
 def sqlcloser(c):
-    yield c.cursor()
-    c.commit()
+    try:
+        yield c.cursor()
+    finally:
+        c.commit()
 
 
 class Database(object):
@@ -48,10 +50,10 @@ class Database(object):
 
     def create_tables(self):
         with self.con as c:
-            c.execute("create table user(userid integer primary key, "
+            c.execute("create table user(userid text primary key, "
                       "name text, email text, facebookauth blob, curconv int)")
             c.execute("create table conversations(convid integer primary key, "
-                      "user1 int, user2 int, archived int)")
+                      "user1 text, user2 text, archived int)")
             c.execute("create table chat(msgid integer primary key, "
                       "convid int, sentts timestamp, sender int, "
                       "reciever int, message blob, recievedts timestamp)")
@@ -95,13 +97,13 @@ class Database(object):
                           "recievedts) values (?, ?, ?, ?, ?, ?)", (data))
             return r.lastrowid
 
-    def new_user(self, name, email, uid=None, facebookauth=None):
-        data = (uid, name, email, facebookauth)
+    def new_user(self, name, email, userid=None, facebookauth=None):
+        data = (userid, name, email, facebookauth)
         try:
             with self.con as c:
                 r = c.execute("insert into user(userid, name, email, "
                               "facebookauth) values (?, ?, ?, ?)", data)
-                return r.lastrowid
+                return userid or r.lastrowid
         except sqlite3.IntegrityError as e:
             raise UserAlreadyExists() from e
 

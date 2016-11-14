@@ -6,5 +6,4 @@ redirect_uri=http://localhost:8080/facebook/login
 
 [server]
 port=8080
-csrf=
-
+fernet_secret=
