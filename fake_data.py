@@ -8,7 +8,6 @@ if __name__ == "__main__":
         print("Inserting user: ", user)
         uid = db.new_user(user, user+"@example.com")
         users[user] = uid
-        print(uid)
     db.new_conversation(users['micha'], users['luke'])
     db.new_message(users['luke'], users['micha'], "Hi micha... this is luke")
     db.deanonymize_user(users['luke'])

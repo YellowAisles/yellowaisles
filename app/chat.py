@@ -6,13 +6,23 @@ from lib.authentication import authenticated
 from collections import defaultdict
 
 
-ACTIVE_CONNECTIONS = defaultdict(set)
+CONV_CONNECTIONS = defaultdict(set)
+
+
+def create_app(parent):
+    app = web.Application(debug=parent.debug)
+    app.update(parent)
+    app.router.add_get('/chat', chat_websocket)
+    app.router.add_get('/conversation', get_conversation)
+    app.router.add_get('/conversations', list_conversations)
+    app.router.add_get('/deanonymize', deanonymize)
+    return app
 
 
 def broadcast(convid, message):
     if not convid:
         return
-    for ws in ACTIVE_CONNECTIONS[convid]:
+    for ws in CONV_CONNECTIONS[convid]:
         ws.send_json(message)
 
 
@@ -68,7 +78,7 @@ async def chat_websocket(request):
     ws = web.WebSocketResponse()
     await ws.prepare(request)
 
-    ACTIVE_CONNECTIONS[convid].add(ws)
+    CONV_CONNECTIONS[convid].add(ws)
     async for msg in ws:
         if msg.type == WSMsgType.TEXT:
             try:
@@ -109,5 +119,5 @@ async def chat_websocket(request):
                     "convid": convid,
                     "user": username,
                 })
-    ACTIVE_CONNECTIONS[convid].remove(ws)
+    CONV_CONNECTIONS[convid].remove(ws)
     return ws

@@ -5,4 +5,6 @@ aiohttp-jinja2
 aiohttp_session[secure]
 jinja2
 ujson
+strictyaml
 python-dateutil
+git+https://github.com/mynameisfiber/aiohttp-debugtoolbar.git

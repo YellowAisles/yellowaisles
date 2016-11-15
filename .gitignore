@@ -1,7 +1,7 @@
 venv
 *.pyc
 *.sw*
-crosstheaisle.conf
+crosstheaisle.yaml
 crosstheaisle.db
 node_modules
 static/bundle.js*

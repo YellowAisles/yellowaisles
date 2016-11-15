@@ -11,6 +11,13 @@ from datetime import timedelta
 from datetime import timezone
 
 
+def create_app(parent):
+    app = web.Application(debug=parent.debug)
+    app.update(parent)
+    app.router.add_get('/login', facebook_login)
+    return app
+
+
 async def facebook_login(request):
     session = await get_session(request)
     config = request.app['config']

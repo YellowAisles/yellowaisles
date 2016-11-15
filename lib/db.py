@@ -1,7 +1,9 @@
 import sqlite3
 import datetime
 import random
-from contextlib import contextmanager
+
+from lib.utils import dict_factory
+from lib.utils import sqlcloser
 
 
 class NoConversation(Exception):
@@ -12,27 +14,8 @@ class ArchivedConversation(Exception):
     pass
 
 
-class InvalidSender(Exception):
-    pass
-
-
 class UserAlreadyExists(Exception):
     pass
-
-
-def dict_factory(cursor, row):
-    d = {}
-    for idx, col in enumerate(cursor.description):
-        d[col[0]] = row[idx]
-    return d
-
-
-@contextmanager
-def sqlcloser(c):
-    try:
-        yield c.cursor()
-    finally:
-        c.commit()
 
 
 class Database(object):
@@ -59,7 +42,8 @@ class Database(object):
             c.execute("create table chat(msgid integer primary key, "
                       "convid int, sentts timestamp, sender int, "
                       "reciever int, message blob, recievedts timestamp)")
-            c.execute("create index if not exists convid_conv on conversations(convid)")
+            c.execute("create index if not exists convid_conv on "
+                      "conversations(convid)")
             c.execute("create index if not exists convid_chat on chat(convid)")
             c.execute("create index if not exists sentts on chat(sentts)")
             c.execute("create index if not exists email on user(email)")
@@ -112,9 +96,9 @@ class Database(object):
             c.execute('UPDATE conversations SET archived = 1 WHERE '
                       'userid == ? OR userid == ?',
                       (user1, user2))
-            convid = abs(hash(str(user1 + user2 + random.random())))
-            c.executemany('INSERT INTO conversations(convid, userid, partnerid, '
-                          'partner_name, archived) '
+            convid = random.randint(0, 2**64)
+            c.executemany('INSERT INTO conversations(convid, userid, '
+                          'partnerid, partner_name, archived) '
                           'VALUES (?, ?, ?, "anonymous", 0)',
                           [(convid, user1, user2), (convid, user2, user1)])
             c.execute('UPDATE user SET curconv = ? WHERE '
@@ -156,7 +140,6 @@ class Database(object):
             raise NoConversation()
         conv_names[convinfo['partnerid']] = convinfo['partner_name']
         return conv_names
-        
 
     def list_user_conversations(self, userid):
         with self.con as c:
@@ -190,7 +173,6 @@ class Database(object):
 
 if __name__ == "__main__":
     import string
-    import random
 
     db = Database(":memory:")
     users = {'micha': None, 'luke': None, 'steven': None}
