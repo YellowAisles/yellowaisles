@@ -53,7 +53,8 @@ class Database(object):
             c.execute("create table user(userid integer primary key autoincrement, "
                       "name text, email text, facebookauth blob, curconv int)")
             c.execute("create table conversations(convid integer primary key, "
-                      "user1 integer, user2 integer, archived int)")
+                      "user1 integer, user2 integer, user1_name text, user2_name text, "
+                      "archived int)")
             c.execute("create table chat(msgid integer primary key, "
                       "convid int, sentts timestamp, sender int, "
                       "reciever int, message blob, recievedts timestamp)")
@@ -113,12 +114,27 @@ class Database(object):
                       'user1 == ? OR user2 == ? OR '
                       'user1 == ? OR user2 == ?',
                       (user1, user1, user2, user2))
-            r = c.execute('INSERT INTO conversations(user1, user2, archived) '
-                          'VALUES (?, ?, 0)', (user1, user2))
+            r = c.execute('INSERT INTO conversations(user1, user2, '
+                          'user1_name, user2_name, archived) '
+                          'VALUES (?, ?, "anonymous", "anonymous", 0)',
+                          (user1, user2))
             convid = r.lastrowid
             c.execute('UPDATE user SET curconv = ? WHERE '
                       '(userid == ? OR userid == ?)', (convid, user1, user2))
             return convid
+
+    def deanonymize_user(self, userid):
+        user = self.get_user(userid)
+        name = user['name']
+        convid = user['curconv']
+        if not convid:
+            return False
+        with self.con as c:
+            c.execute('UPDATE conversations SET user1_name = ? WHERE '
+                      'user1 == ? AND convid == ?', (name, userid, convid))
+            c.execute('UPDATE conversations SET user2_name = ? WHERE '
+                      'user2 == ? AND convid == ?', (name, userid, convid))
+        return True
 
     def get_conversation(self, convid, userid=None):
         if userid is not None:
@@ -133,6 +149,12 @@ class Database(object):
         with self.con as c:
             c.execute('SELECT * FROM chat WHERE convid == ? ORDER BY sentts',
                       (convid,))
+            return c.fetchall()
+
+    def list_user_conversations(self, userid):
+        with self.con as c:
+            c.execute('SELECT * FROM conversations WHERE user1 == ? '
+                      'OR user2 == ?', (userid,userid))
             return c.fetchall()
 
     def set_conversation_read(self, userid, convid):

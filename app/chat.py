@@ -9,11 +9,27 @@ from collections import defaultdict
 ACTIVE_CONNECTIONS = defaultdict(set)
 
 
-async def broadcast(convid, message):
+def broadcast(convid, message):
     if not convid:
         return
     for ws in ACTIVE_CONNECTIONS[convid]:
-        await ws.send_json(message)
+        ws.send_json(message)
+
+
+@authenticated
+async def list_conversations(request):
+    session = await get_session(request)
+    userid = session['userid']
+    conversation_list = request.app['db'].list_user_conversations(userid)
+    return web.json_response(conversation_list)
+
+
+@authenticated
+async def deanonymize(request):
+    session = await get_session(request)
+    userid = session['userid']
+    result = request.app['db'].deanonymize_user(userid)
+    return web.json_response(result)
 
 
 @authenticated
@@ -38,18 +54,15 @@ async def chat_websocket(request):
     session = await get_session(request)
     userid = session['userid']
     convid = request.app['db'].get_user(userid)['curconv']
+    if not convid:
+        raise web.HTTPPreconditionFailed()
 
     ws = web.WebSocketResponse()
     await ws.prepare(request)
 
-    if not convid:
-        raise web.HTTPPreconditionFailed()
-
     ACTIVE_CONNECTIONS[convid].add(ws)
     async for msg in ws:
-        if msg.type == WSMsgType.ERROR:
-            ACTIVE_CONNECTIONS[convid].remove(ws)
-        elif msg.type == WSMsgType.TEXT:
+        if msg.type == WSMsgType.TEXT:
             try:
                 data = json.loads(msg.data)
             except (ValueError, TypeError):
@@ -61,7 +74,7 @@ async def chat_websocket(request):
                 continue
 
             if data['method'] == 'send_message':
-                if data['convid'] != convid:
+                if 'convid' not in data or data['convid'] != convid:
                     ws.send_json({"error": "Sending message on unauthorized "
                                            "conversation"})
                     continue
@@ -86,3 +99,5 @@ async def chat_websocket(request):
                     "method": 'stop_typing',
                     "user": userid,
                 })
+    ACTIVE_CONNECTIONS[convid].remove(ws)
+    return ws

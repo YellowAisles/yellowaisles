@@ -11,6 +11,8 @@ from lib import db
 from app.facebook import facebook_login
 from app.chat import chat_websocket
 from app.chat import get_conversation
+from app.chat import list_conversations
+from app.chat import deanonymize
 
 import configparser
 import base64
@@ -54,6 +56,8 @@ if __name__ == "__main__":
     app.router.add_get('/facebook/login', facebook_login)
     app.router.add_get('/api/chat', chat_websocket)
     app.router.add_get('/api/conversation', get_conversation)
+    app.router.add_get('/api/conversations', list_conversations)
+    app.router.add_get('/api/deanonymize', deanonymize)
 
     if config['server']['debug'].lower() == "true":
         print("Debug mode")

@@ -11,6 +11,7 @@ if __name__ == "__main__":
         print(uid)
     db.new_conversation(users['micha'], users['luke'])
     db.new_message(users['luke'], users['micha'], "Hi micha... this is luke")
+    db.deanonymize_user(users['luke'])
 
     db.new_conversation(users['micha'], users['steven'])
     db.new_message(users['micha'], users['steven'], "hey steven... how are you?")
