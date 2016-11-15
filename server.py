@@ -25,6 +25,13 @@ async def login(request):
     return {'config': request.app['config'],
             'name': session.get('name', None)}
 
+async def set_userid(request):
+    params = request.url.query
+    userid = int(params['userid'])
+    session = await get_session(request)
+    session['userid'] = userid
+    return web.json_response({'userid': userid})
+
 
 if __name__ == "__main__":
     config = configparser.ConfigParser()
@@ -47,5 +54,9 @@ if __name__ == "__main__":
     app.router.add_get('/facebook/login', facebook_login)
     app.router.add_get('/api/chat', chat_websocket)
     app.router.add_get('/api/conversation', get_conversation)
+
+    if config['server']['debug'].lower() == "true":
+        print("Debug mode")
+        app.router.add_get('/debug/set_userid', set_userid)
 
     web.run_app(app, port=int(config['server']['port']))

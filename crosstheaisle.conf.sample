@@ -8,3 +8,4 @@ min_account_years=5
 [server]
 port=8080
 fernet_secret=
+debug=false

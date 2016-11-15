@@ -50,10 +50,10 @@ class Database(object):
 
     def create_tables(self):
         with self.con as c:
-            c.execute("create table user(userid text primary key, "
+            c.execute("create table user(userid integer primary key autoincrement, "
                       "name text, email text, facebookauth blob, curconv int)")
             c.execute("create table conversations(convid integer primary key, "
-                      "user1 text, user2 text, archived int)")
+                      "user1 integer, user2 integer, archived int)")
             c.execute("create table chat(msgid integer primary key, "
                       "convid int, sentts timestamp, sender int, "
                       "reciever int, message blob, recievedts timestamp)")
@@ -98,11 +98,11 @@ class Database(object):
             return r.lastrowid
 
     def new_user(self, name, email, userid=None, facebookauth=None):
-        data = (userid, name, email, facebookauth)
         try:
             with self.con as c:
                 r = c.execute("insert into user(userid, name, email, "
-                              "facebookauth) values (?, ?, ?, ?)", data)
+                              "facebookauth) values (?, ?, ?, ?)",
+                              (userid, name, email, facebookauth))
                 return userid or r.lastrowid
         except sqlite3.IntegrityError as e:
             raise UserAlreadyExists() from e
@@ -117,7 +117,7 @@ class Database(object):
                           'VALUES (?, ?, 0)', (user1, user2))
             convid = r.lastrowid
             c.execute('UPDATE user SET curconv = ? WHERE '
-                      'userid == ? OR userid == ?', (convid, user1, user2))
+                      '(userid == ? OR userid == ?)', (convid, user1, user2))
             return convid
 
     def get_conversation(self, convid, userid=None):
@@ -135,16 +135,23 @@ class Database(object):
                       (convid,))
             return c.fetchall()
 
+    def set_conversation_read(self, userid, convid):
+        now = datetime.datetime.now()
+        with self.con as c:
+            c.execute('UPDATE chat SET recievedts = ? WHERE reciever == ? AND '
+                      'convid == ? AND recievedts is NULL',
+                      (now, userid, convid))
+
     def get_user_from_email(self, email):
         with self.con as c:
             c.execute('SELECT * FROM user WHERE email == ?', (email,))
             return c.fetchone()
 
-    def get_user_current_conversation(self, userid):
+    def get_user_current_convid(self, userid):
         with self.con as c:
             c.execute('SELECT curconv FROM user WHERE userid == ?', (userid,))
             curconv = c.fetchone()['curconv']
-        return self.get_conversation(curconv)
+        return curconv
 
     def get_user(self, userid):
         with self.con as c:
