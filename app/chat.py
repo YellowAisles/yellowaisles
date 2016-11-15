@@ -21,6 +21,8 @@ async def list_conversations(request):
     session = await get_session(request)
     userid = session['userid']
     conversation_list = request.app['db'].list_user_conversations(userid)
+    for conv in conversation_list:
+        conv.pop('partnerid', None)
     return web.json_response(conversation_list)
 
 
@@ -46,6 +48,11 @@ async def get_conversation(request):
         convid = request.app['db'].get_user_current_convid(userid)
     request.app['db'].set_conversation_read(userid, convid)
     conversation = request.app['db'].get_conversation(convid, userid=userid)
+    conversation_names = request.app['db'].get_conversation_names(userid,
+                                                                  convid)
+    for message in conversation:
+        message['sender'] = conversation_names[message['sender']]
+        message['reciever'] = conversation_names[message['reciever']]
     return web.json_response({'convid': convid, 'data': conversation})
 
 
@@ -53,6 +60,7 @@ async def get_conversation(request):
 async def chat_websocket(request):
     session = await get_session(request)
     userid = session['userid']
+    username = session['name']
     convid = request.app['db'].get_user(userid)['curconv']
     if not convid:
         raise web.HTTPPreconditionFailed()
@@ -86,18 +94,20 @@ async def chat_websocket(request):
                 broadcast(convid, {
                     "method": "new_message",
                     "convid": convid,
-                    "sender": userid,
+                    "sender": username,
                     "message": data['message'],
                 })
             elif data['method'] == 'typing':
                 broadcast(convid, {
                     "method": 'typing',
-                    "user": userid,
+                    "convid": convid,
+                    "user": username,
                 })
             elif data['method'] == 'stop_typing':
                 broadcast(convid, {
                     "method": 'stop_typing',
-                    "user": userid,
+                    "convid": convid,
+                    "user": username,
                 })
     ACTIVE_CONNECTIONS[convid].remove(ws)
     return ws

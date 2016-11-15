@@ -1,5 +1,6 @@
 import sqlite3
 import datetime
+import random
 from contextlib import contextmanager
 
 
@@ -52,22 +53,23 @@ class Database(object):
         with self.con as c:
             c.execute("create table user(userid integer primary key autoincrement, "
                       "name text, email text, facebookauth blob, curconv int)")
-            c.execute("create table conversations(convid integer primary key, "
-                      "user1 integer, user2 integer, user1_name text, user2_name text, "
-                      "archived int)")
+            c.execute("create table conversations(convid integer, "
+                      "userid integer, partner_name text, partnerid integer, "
+                      "archived integer)")
             c.execute("create table chat(msgid integer primary key, "
                       "convid int, sentts timestamp, sender int, "
                       "reciever int, message blob, recievedts timestamp)")
-            c.execute("create index if not exists convid on chat(convid)")
+            c.execute("create index if not exists convid_conv on conversations(convid)")
+            c.execute("create index if not exists convid_chat on chat(convid)")
+            c.execute("create index if not exists sentts on chat(sentts)")
             c.execute("create index if not exists email on user(email)")
 
     def new_message(self, sender, reciever, message):
         with self.con as c:
             c.execute('SELECT convid FROM conversations WHERE '
-                      '((user1 == ? AND user2 == ?) OR'
-                      ' (user2 == ? AND user1 == ?)) AND '
+                      'userid == ? and partnerid == ? and '
                       'archived == 0',
-                      (sender, reciever)*2)
+                      (sender, reciever))
             try:
                 convid = c.fetchone()['convid']
             except TypeError as e:
@@ -76,17 +78,14 @@ class Database(object):
 
     def new_message_user(self, convid, sender, message):
         with self.con as c:
-            c.execute('SELECT * FROM conversations WHERE convid == ?',
-                      (convid,))
+            c.execute('SELECT * FROM conversations WHERE convid == ? '
+                      'AND userid == ?', (convid, sender))
             conv = c.fetchone()
+        if not conv:
+            raise NoConversation()
         if conv['archived']:
             raise ArchivedConversation()
-        if sender not in (conv['user1'], conv['user2']):
-            raise InvalidSender()
-        if sender == conv['user1']:
-            reciever = conv['user1']
-        else:
-            reciever = conv['user2']
+        reciever = conv['partnerid']
         return self._add_message(convid, sender, reciever, message)
 
     def _add_message(self, convid, sender, reciever, message):
@@ -111,14 +110,13 @@ class Database(object):
     def new_conversation(self, user1, user2):
         with self.con as c:
             c.execute('UPDATE conversations SET archived = 1 WHERE '
-                      'user1 == ? OR user2 == ? OR '
-                      'user1 == ? OR user2 == ?',
-                      (user1, user1, user2, user2))
-            r = c.execute('INSERT INTO conversations(user1, user2, '
-                          'user1_name, user2_name, archived) '
-                          'VALUES (?, ?, "anonymous", "anonymous", 0)',
-                          (user1, user2))
-            convid = r.lastrowid
+                      'userid == ? OR userid == ?',
+                      (user1, user2))
+            convid = abs(hash(str(user1 + user2 + random.random())))
+            c.executemany('INSERT INTO conversations(convid, userid, partnerid, '
+                          'partner_name, archived) '
+                          'VALUES (?, ?, ?, "anonymous", 0)',
+                          [(convid, user1, user2), (convid, user2, user1)])
             c.execute('UPDATE user SET curconv = ? WHERE '
                       '(userid == ? OR userid == ?)', (convid, user1, user2))
             return convid
@@ -130,31 +128,40 @@ class Database(object):
         if not convid:
             return False
         with self.con as c:
-            c.execute('UPDATE conversations SET user1_name = ? WHERE '
-                      'user1 == ? AND convid == ?', (name, userid, convid))
-            c.execute('UPDATE conversations SET user2_name = ? WHERE '
-                      'user2 == ? AND convid == ?', (name, userid, convid))
+            c.execute('UPDATE conversations SET partner_name = ? WHERE '
+                      'partnerid== ? AND convid == ?', (name, userid, convid))
         return True
 
     def get_conversation(self, convid, userid=None):
         if userid is not None:
             with self.con as c:
-                c.execute('SELECT * FROM conversations WHERE convid == ?',
-                          (convid,))
+                c.execute('SELECT * FROM conversations WHERE userid == ? '
+                          'and convid == ?', (userid, convid))
                 conv = c.fetchone()
                 if not conv:
-                    return []
-                if userid != conv['user1'] and userid != conv['user2']:
                     return []
         with self.con as c:
             c.execute('SELECT * FROM chat WHERE convid == ? ORDER BY sentts',
                       (convid,))
             return c.fetchall()
 
+    def get_conversation_names(self, userid, convid):
+        user = self.get_user(userid)
+        conv_names = {userid: user['name']}
+        with self.con as c:
+            c.execute('SELECT * FROM conversations WHERE userid == ? '
+                      'and convid == ?', (userid, convid,))
+            convinfo = c.fetchone()
+        if not convinfo:
+            raise NoConversation()
+        conv_names[convinfo['partnerid']] = convinfo['partner_name']
+        return conv_names
+        
+
     def list_user_conversations(self, userid):
         with self.con as c:
-            c.execute('SELECT * FROM conversations WHERE user1 == ? '
-                      'OR user2 == ?', (userid,userid))
+            c.execute('SELECT * FROM conversations WHERE userid == ? ',
+                      (userid,))
             return c.fetchall()
 
     def set_conversation_read(self, userid, convid):
