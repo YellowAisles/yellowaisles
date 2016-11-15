@@ -21,15 +21,16 @@ async def get_conversation(request):
     params = request.url.query
     session = await get_session(request)
     userid = session['userid']
-    if 'convid' not in params:
-        conversation = request.app['db'].get_user_current_conversation(userid)
-    else:
+    if 'convid' in params:
         try:
             convid = int(params['convid'])
         except ValueError:
             raise web.HTTPBadRequest(text='invalid_convid')
-        conversation = request.app['db'].get_conversation(convid, userid=userid)
-    return web.json_response(conversation)
+    else:
+        convid = request.app['db'].get_user_current_convid(userid)
+    request.app['db'].set_conversation_read(userid, convid)
+    conversation = request.app['db'].get_conversation(convid, userid=userid)
+    return web.json_response({'convid': convid, 'data': conversation})
 
 
 @authenticated
