@@ -17,6 +17,10 @@ import logging
 
 
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+
+FORMAT = ('[%(levelname)s][%(module)s.%(funcName)s:%(lineno)d] '
+          '%(message)s')
+logging.basicConfig(format=FORMAT)
 logger = logging.getLogger(__name__)
 
 
@@ -42,13 +46,16 @@ if __name__ == "__main__":
     app['config'] = config
     app['db'] = db.Database()
 
+    logging.getLogger().setLevel(logging.DEBUG if config['server']['debug']
+                                 else logging.INFO)
+
     secret_key = base64.urlsafe_b64decode(config['server']['fernet_secret'])
     aiohttp_session.setup(app, EncryptedCookieStorage(secret_key))
 
     if config['server']['debug']:
+        logging.info("Debug on")
         import aiohttp_debugtoolbar
         aiohttp_debugtoolbar.setup(app)
-        print("Debug mode")
         app.router.add_get('/debug/set_userid', set_userid)
 
     aiohttp_jinja2.setup(

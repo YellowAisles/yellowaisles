@@ -1,21 +1,24 @@
 from aiohttp import web
-from aiohttp import WSMsgType
+from aiohttp import WSMsgType, WSCloseCode
 from aiohttp_session import get_session
 import ujson as json
 from lib.authentication import authenticated
 from collections import defaultdict
+import logging
 
 
 CONV_CONNECTIONS = defaultdict(set)
+ALL_CONNECTIONS = set()
 
 
 def create_app(parent):
     app = web.Application(debug=parent.debug)
     app.update(parent)
-    app.router.add_get('/chat', chat_websocket)
+    app.router.add_get('/websocket', chat_websocket)
     app.router.add_get('/conversation', get_conversation)
     app.router.add_get('/conversations', list_conversations)
     app.router.add_get('/deanonymize', deanonymize)
+    app.on_shutdown.append(on_shutdown)
     return app
 
 
@@ -74,50 +77,64 @@ async def chat_websocket(request):
     convid = request.app['db'].get_user(userid)['curconv']
     if not convid:
         raise web.HTTPPreconditionFailed()
+    userdata = {'userid': userid, 'username': username, 'convid': convid}
 
     ws = web.WebSocketResponse()
     await ws.prepare(request)
 
     CONV_CONNECTIONS[convid].add(ws)
-    async for msg in ws:
-        if msg.type == WSMsgType.TEXT:
-            try:
-                data = json.loads(msg.data)
-            except (ValueError, TypeError):
-                ws.send_json({"error": "Could not parse message"})
-                continue
-
-            if 'method' not in data:
-                ws.send_json({"error": "No method set"})
-                continue
-
-            if data['method'] == 'send_message':
-                if 'convid' not in data or data['convid'] != convid:
-                    ws.send_json({"error": "Sending message on unauthorized "
-                                           "conversation"})
-                    continue
-                elif 'message' not in data:
-                    ws.send_json({"error": "No message"})
-                    continue
-                request.app['db'].new_message_user(convid, userid,
-                                                   data['message'])
-                broadcast(convid, {
-                    "method": "new_message",
-                    "convid": convid,
-                    "sender": username,
-                    "message": data['message'],
-                })
-            elif data['method'] == 'typing':
-                broadcast(convid, {
-                    "method": 'typing',
-                    "convid": convid,
-                    "user": username,
-                })
-            elif data['method'] == 'stop_typing':
-                broadcast(convid, {
-                    "method": 'stop_typing',
-                    "convid": convid,
-                    "user": username,
-                })
-    CONV_CONNECTIONS[convid].remove(ws)
+    ALL_CONNECTIONS.add(ws)
+    try:
+        async for msg in ws:
+            dispatch_message(request, ws, msg, userdata)
+    finally:
+        CONV_CONNECTIONS[convid].remove(ws)
+        ALL_CONNECTIONS.remove(ws)
     return ws
+
+
+def dispatch_message(request, ws, msg, userdata):
+    userid = userdata['userid']
+    convid = userdata['convid']
+    username = userdata['username']
+    if msg.type == WSMsgType.TEXT:
+        try:
+            data = json.loads(msg.data)
+        except (ValueError, TypeError):
+            return ws.send_json({"error": "Could not parse message"})
+
+        if 'method' not in data:
+            return ws.send_json({"error": "No method set"})
+
+        if data['method'] == 'send_message':
+            if 'convid' not in data or data['convid'] != convid:
+                return ws.send_json({"error": "Sending message on "
+                                              "unauthorized conversation"})
+            elif 'message' not in data:
+                return ws.send_json({"error": "No message"})
+            request.app['db'].new_message_user(convid, userid,
+                                               data['message'])
+            broadcast(convid, {
+                "method": "new_message",
+                "convid": convid,
+                "sender": username,
+                "message": data['message'],
+            })
+        elif data['method'] == 'typing':
+            broadcast(convid, {
+                "method": 'typing',
+                "convid": convid,
+                "user": username,
+            })
+        elif data['method'] == 'stop_typing':
+            broadcast(convid, {
+                "method": 'stop_typing',
+                "convid": convid,
+                "user": username,
+            })
+
+
+async def on_shutdown(app):
+    for ws in ALL_CONNECTIONS:
+        await ws.close(code=WSCloseCode.GOING_AWAY,
+                       message='Server shutdown')
