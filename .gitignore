@@ -3,3 +3,5 @@ venv
 *.sw*
 crosstheaisle.conf
 crosstheaisle.db
+node_modules
+static/bundle.js*
