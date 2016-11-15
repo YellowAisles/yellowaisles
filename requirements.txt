@@ -5,3 +5,4 @@ aiohttp-jinja2
 aiohttp_session[secure]
 jinja2
 ujson
+python-dateutil

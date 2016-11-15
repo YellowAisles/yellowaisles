@@ -5,6 +5,11 @@ from lib import db
 from lib import requests
 from lib.utils import obscure_id
 
+from dateutil.parser import parse as date_parser
+from datetime import datetime
+from datetime import timedelta
+from datetime import timezone
+
 
 async def facebook_login(request):
     session = await get_session(request)
@@ -24,11 +29,22 @@ async def facebook_login(request):
     url = requests.build_url(access_token_url, token_request_params)
     access_token = await requests.get_json(url)
 
-    fb_url = ("https://graph.facebook.com/v2.8/me?fields=email,name"
+    fb_url = ("https://graph.facebook.com/v2.8/me?fields=email,name,"
+              "verified,albums.order(reverse_chronological).limit(1)"
               "&access_token={access_token}").format(**access_token)
     user_data = await requests.get_json(fb_url)
+
+    if not user_data['verified']:
+        raise web.HTTPForbidden(text="facebook_not_verified")
+    first_album_date = user_data['albums']['data'][0]["created_time"]
+    min_account_age = timedelta(days=365.25 *
+                                int(config['facebook']['min_account_years']))
+    now = datetime.now(timezone.utc)
+    if abs(date_parser(first_album_date) - now) < min_account_age:
+        raise web.HTTPForbidden(text="facebook_account_not_old_enough")
+
     user_data['id'] = obscure_id(int(user_data['id']),
-                                 request.app['config']['server']['fernet_secret'],
+                                 config['server']['fernet_secret'],
                                  'facebook')
 
     try:

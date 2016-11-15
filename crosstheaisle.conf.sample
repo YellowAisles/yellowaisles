@@ -1,8 +1,9 @@
 [facebook]
 app_id=
-scopes=user_likes,user_location,user_work_history,user_birthday,email,user_friends,user_religion_politics
+scopes=email,user_photos,user_posts,public_profile
 app_secret=
 redirect_uri=http://localhost:8080/facebook/login
+min_account_years=5
 
 [server]
 port=8080
