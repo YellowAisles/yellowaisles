@@ -2,7 +2,7 @@ var path = require("path");
 
 module.exports = {
   context: __dirname,
-  entry: "./client/index.jsx",
+  entry: "./frontend/index.jsx",
   output: {
     path: path.join(__dirname, 'static'),
     filename: "bundle.js"
