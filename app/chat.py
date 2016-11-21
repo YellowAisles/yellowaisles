@@ -4,7 +4,6 @@ from aiohttp_session import get_session
 import ujson as json
 from lib.authentication import authenticated
 from collections import defaultdict
-import logging
 
 
 CONV_CONNECTIONS = defaultdict(set)
@@ -15,9 +14,9 @@ def create_app(parent):
     app = web.Application(debug=parent.debug)
     app.update(parent)
     app.router.add_get('/websocket', chat_websocket)
-    app.router.add_get('/conversation', get_conversation)
-    app.router.add_get('/conversations', list_conversations)
-    app.router.add_get('/deanonymize', deanonymize)
+    app.router.add_get('/conversation/current', get_conversation)
+    app.router.add_get('/conversation', list_conversations)
+    app.router.add_get('/conversation/deanonymize', deanonymize)
     app.on_shutdown.append(on_shutdown)
     return app
 

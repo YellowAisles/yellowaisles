@@ -35,7 +35,9 @@ class Database(object):
     def create_tables(self):
         with self.con as c:
             c.execute("create table user(userid integer primary key autoincrement, "
-                      "name text, email text, facebookauth blob, curconv int)")
+                      "name text, email text, facebookauth text, curconv int)")
+            # c.execute("create table profiles(userid integer primary key autoincrement, "
+            #           "profilepic text)")
             c.execute("create table conversations(convid integer, "
                       "userid integer, partner_name text, partnerid integer, "
                       "archived integer)")

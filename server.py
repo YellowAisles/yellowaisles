@@ -63,9 +63,9 @@ if __name__ == "__main__":
         loader=jinja2.FileSystemLoader('./template/')
     )
 
-    app.router.add_static('/static', './static/')
     app.router.add_get('/login', login)
     app.router.add_subapp('/api/chat', chat.create_app(app))
     app.router.add_subapp('/auth/facebook', facebook.create_app(app))
+    app.router.add_static('/', './static/')
 
     web.run_app(app, port=int(config['server']['port']))
