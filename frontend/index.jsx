@@ -3,8 +3,6 @@ import ReactDOM from 'react-dom';
 import Root from './components/root';
 import configureStore from './store/store';
 
-// let mainHTML = require('html!./templates/landing.html');
-
 document.addEventListener('DOMContentLoaded', () => {
   let store;
 
